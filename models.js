@@ -13,7 +13,8 @@ let constants = (function() {
 			},
 			actions: {
 				identifyLetters: '#find',
-				probableLetters: '#close'
+				probableLetters: '#close',
+				helperLetters: '#identify'
 			},
 			output: {
 				textArea: 'textarea'
@@ -269,7 +270,6 @@ let predictor = (function() {
 	let getPossibleWords = function(model) {
 		let range = [...words]
 		range = filterByMissingLetters(range, model.cache.missing)
-		console.log(words.length, range.length)
 		range = filterByPotentialLetters(range, model.cache.wrongPosition)
 		range = filterMissingPotentialLetters(range, model.cache.wrongPosition)
 		return filterByFixedLetters(range, model.cache.found)
@@ -328,8 +328,7 @@ let predictor = (function() {
 		return letterPowers;
 	}
 
-	let getLetterWeights = function(index, letter, model, letterPowers) {
-		let weight = 100;
+	let getLetterWeights = function(index, letter, model, letterPowers, weight) {
 		if(model.cache.missing[letter]!==undefined) return -weight;
 		else if(model.cache.found[letter]!== undefined && model.cache.found[letter].has(index)) return weight;
 		else if(model.cache.wrongPosition[letter] !== undefined){
@@ -339,16 +338,24 @@ let predictor = (function() {
 		else return letterPowers[letter][index]
 	}
 
-	let getProbableWords = function(model, count=10) {
-		let range = getPossibleWords(model)
-		console.log(range.length)
+	let getHelperLetterWeights = function(index, letter,model, letterPowers, weight, usedLetters) {
+
+		if(model.cache.missing.has(letter)) return weight;
+		else if(model.cache.found[letter]!== undefined ) return weight;
+		else if(model.cache.wrongPosition[letter] !== undefined) return weight;
+		else if(usedLetters.indexOf(letter)!==-1) return weight;
+		else return letterPowers[letter][index]
+	}
+
+	let getProbableWords = function(model, count=10, weight=50) {
+		let range = getPossibleWords(model);
 		let letterPowers = getLetterPowers(range);
 		let wordPower = {}
 
 		range.forEach(word=>{
 			let power = 0;
 			for(let idx in word) {
-				power+=getLetterWeights(idx, word[idx], model, letterPowers)
+				power+=getLetterWeights(idx, word[idx], model, letterPowers, weight)
 			}
 			wordPower[word] = power
 		})
@@ -364,44 +371,92 @@ let predictor = (function() {
 		return probableWords
 	}
 
+	let getHelperWords = function(model, count=10, weight=-10000) {
+		let range = [...words]
+		let letterPowers =  getLetterPowers(range)
+		let wordPower = {}
+		range.forEach(word=>{
+			let power = 0, usedLetters= []
+			if(word==='COMID') {
+				console.log('hmm')
+			}
+			for(let idx in word) {
+				power+=getHelperLetterWeights(idx, word[idx], model, letterPowers, weight, usedLetters)
+				usedLetters.push(word[idx])
+			}
+			wordPower[word] = power
+		})
+
+		range.sort((a,b)=>wordPower[b]-wordPower[a])
+		let w = range.slice(0, count)
+
+		let probableWords = {}
+		for(let i=0; i<count; i++) {
+			probableWords[w[i]] = wordPower[w[i]]
+		}
+
+		return probableWords
+	}
+
 	return {
+		identifyLetterPowers: getLetterPowers,
 		identifyProbableWordPowers: getProbableWords,
-		setWords
+		setWords,
+		identifyHelperWordPowers: getHelperWords
 	}
 })();
 
 
 logicExecutor.main()
 
-$(constants.domIds.input.exec).click(function() {
+$(constants.domIds.input.exec).click(function(e) {
+	e.preventDefault()
 	logicExecutor.addInput(htmlExecutor.fetchInput());
 	htmlExecutor.setHistory(logicExecutor.model.inputs);
 	$(constants.domIds.input.word).val("")
 	$(constants.domIds.input.value).val("")
 	console.log(logicExecutor.model.cache)
+	$(constants.domIds.actions.probableLetters).focus()
+	return false
 });
 
-// $(constants.domIds.actions.identifyLetters).click(function() {
-// 	let letterPowers = predictor.identifyLetterPowers(logicExecutor.model);
-// 	let output = '';
-// 	Object.keys(letterPowers).forEach(letter=>output+=letter+':'+letterPowers[letter]+',\t')
-// 	$(constants.domIds.output.textArea).val(output)
-// });
-
-$(constants.domIds.actions.probableLetters).click(function() {
-	$(constants.domIds.output.textArea).val('')
-	let wordPowers = (predictor.identifyProbableWordPowers(logicExecutor.model, 30))
+$(constants.domIds.actions.identifyLetters).click(function() {
+	let letterPowers = predictor.identifyLetterPowers(logicExecutor.model);
 	let output = '';
-	Object.keys(wordPowers).forEach(letter=>output+=letter+':'+wordPowers[letter]+',\t')
+	Object.keys(letterPowers).forEach(letter=>output+=letter+':'+letterPowers[letter]+',\t')
 	$(constants.domIds.output.textArea).val(output)
 });
 
-$(constants.domIds.history.reset).click(function() {
+$(constants.domIds.actions.probableLetters).click(function(e) {
+	e.preventDefault()
+	$(constants.domIds.output.textArea).val('')
+	let wordPowers = predictor.identifyProbableWordPowers(logicExecutor.model, 30)
+	let output = '';
+	Object.keys(wordPowers).forEach(letter=>output+=letter+':'+wordPowers[letter]+',\t')
+	$(constants.domIds.output.textArea).val(output)
+	$(constants.domIds.input.word).focus()
+	return false
+});
+
+$(constants.domIds.history.reset).click(function(e) {
+	e.preventDefault()
 	predictor.setWords(window.words);
 	logicExecutor.main();
-	console.log(logicExecutor.model.inputs)
 	htmlExecutor.setHistory(logicExecutor.model.inputs)
-})
+	$(constants.domIds.input.word).focus()
+	return false
+});
+
+$(constants.domIds.actions.helperLetters).click(function(e) {
+	e.preventDefault()
+	$(constants.domIds.output.textArea).val('')
+	let wordPowers = predictor.identifyHelperWordPowers(logicExecutor.model, 30)
+	let output = '';
+	Object.keys(wordPowers).forEach(letter=>output+=letter+':'+wordPowers[letter]+',\t')
+	$(constants.domIds.output.textArea).val(output)
+	$(constants.domIds.input.word).focus()
+	return false
+});
 
 /*
  * Identify Letters : Find which letters are best to gamble with
