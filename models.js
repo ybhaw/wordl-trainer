@@ -65,7 +65,7 @@ let logicExecutor = (function() {
 		}
 		positions =  [[],[],[]]
 		idxs.forEach(idx=>positions[value[idx]].push(idx))
-		if(positions[1].length==0 && positions[2].length==0) return;
+		if(positions[1].length==0 && positions[2].length==0) return false;
 		positions[0].forEach(idx=>{
 			addValueToCache(letter, idx, '1')
 		})
@@ -81,6 +81,7 @@ let logicExecutor = (function() {
 				addValueToCache(letter, i, '1')
 			}
 		}
+		return true;
 	}
 
 	let addValueToCache = function(letter, idx, type) {
@@ -217,7 +218,7 @@ let predictor = (function() {
 
 	let filterByMissingLetters = function(words, missing) {
 		return words.filter(word=> {
-			for(let letter in missing) {
+			for(let letter of missing) {
 				if(word.indexOf(letter) !== -1) {
 					return false
 				}
@@ -268,6 +269,7 @@ let predictor = (function() {
 	let getPossibleWords = function(model) {
 		let range = [...words]
 		range = filterByMissingLetters(range, model.cache.missing)
+		console.log(words.length, range.length)
 		range = filterByPotentialLetters(range, model.cache.wrongPosition)
 		range = filterMissingPotentialLetters(range, model.cache.wrongPosition)
 		return filterByFixedLetters(range, model.cache.found)
@@ -339,6 +341,7 @@ let predictor = (function() {
 
 	let getProbableWords = function(model, count=10) {
 		let range = getPossibleWords(model)
+		console.log(range.length)
 		let letterPowers = getLetterPowers(range);
 		let wordPower = {}
 
@@ -375,6 +378,7 @@ $(constants.domIds.input.exec).click(function() {
 	htmlExecutor.setHistory(logicExecutor.model.inputs);
 	$(constants.domIds.input.word).val("")
 	$(constants.domIds.input.value).val("")
+	console.log(logicExecutor.model.cache)
 });
 
 // $(constants.domIds.actions.identifyLetters).click(function() {
@@ -385,6 +389,7 @@ $(constants.domIds.input.exec).click(function() {
 // });
 
 $(constants.domIds.actions.probableLetters).click(function() {
+	$(constants.domIds.output.textArea).val('')
 	let wordPowers = (predictor.identifyProbableWordPowers(logicExecutor.model, 30))
 	let output = '';
 	Object.keys(wordPowers).forEach(letter=>output+=letter+':'+wordPowers[letter]+',\t')
