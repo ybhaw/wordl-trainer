@@ -8,7 +8,8 @@ let constants = (function() {
 				exec 	: '#input'
 			},
 			history: {
-				className: '.input-history'
+				className: '.input-history',
+				reset: '#reset'
 			},
 			actions: {
 				identifyLetters: '#find',
@@ -187,6 +188,7 @@ let htmlExecutor = (function() {
 			htmls.push(getHtmlForInput(input.word, input.value))
 		})
 		let inputHistoryDoms = $(constants.domIds.history.className)
+		inputHistoryDoms.each(function(e,f) {$(f).html('')})
 		if(inputHistoryDoms.length<inputs.length) {
 			alert("Please reset board.");
 			return;
@@ -205,7 +207,13 @@ let htmlExecutor = (function() {
 
 let predictor = (function() {
 
-	let words = window.words
+	let words = []
+
+	let setWords = function(w) {
+		words = [...w]
+	}
+
+	setWords(window.words)
 
 	let filterByMissingLetters = function(words, missing) {
 		return words.filter(word=> {
@@ -239,11 +247,9 @@ let predictor = (function() {
 			}
 			return true;
 		})
-		console.log(words.length, k.length)
 		return k
 	}
 
-	console.log(filterByPotentialLetters(['SANES', 'AINEE'], {'E': new Set([3])}))
 
 	let filterByFixedLetters = function(words, fixedLetters) {
 		return words.filter(word=>{
@@ -307,29 +313,42 @@ let predictor = (function() {
 		else return weights[LETTER_TYPE_NAMES.UNKNOWN]
 	}
 
-	let getLetterWeights = function(index, letter, model) {
-		let weight = 10;
+	let getLetterPowers = function(range) {
+		let letterPowers = {}
+		constants.alphabets.split('').forEach(letter=>{
+			letterPowers[letter] = [0,0,0,0,0]
+		})
+		range.forEach(word=>{
+			for(let i =0; i<word.length; ++i) {
+				letterPowers[word[i]][i]++;
+			}
+		})
+		return letterPowers;
+	}
+
+	let getLetterWeights = function(index, letter, model, letterPowers) {
+		let weight = 100;
 		if(model.cache.missing[letter]!==undefined) return -weight;
 		else if(model.cache.found[letter]!== undefined && model.cache.found[letter].has(index)) return weight;
 		else if(model.cache.wrongPosition[letter] !== undefined){
 			if(model.cache.wrongPosition[letter].has(index)) return -weight;
 			else return weight;
 		}
-		else return 1;
+		else return letterPowers[letter][index]
 	}
 
 	let getProbableWords = function(model, count=10) {
 		let range = getPossibleWords(model)
+		let letterPowers = getLetterPowers(range);
 		let wordPower = {}
 
 		range.forEach(word=>{
 			let power = 0;
 			for(let idx in word) {
-				power+=getLetterWeights(idx, word[idx], model)
+				power+=getLetterWeights(idx, word[idx], model, letterPowers)
 			}
 			wordPower[word] = power
 		})
-
 
 		range.sort((a,b)=>wordPower[b] - wordPower[a])
 		let words = range.slice(0,count)
@@ -342,50 +361,9 @@ let predictor = (function() {
 		return probableWords
 	}
 
-
-
-	d = {
-		    "cache": {
-		        "missing": new Set(['S','A','N','S','K','V','M','L','T','R','Y','C','O']),
-		        "wrongPosition": {
-		            "E": new Set([2, 4]),
-		            "R": new Set([0,2])
-		        },
-		        "found": {
-		            "E": new Set([3, 1]),
-		            "D": new Set([0]),
-		            "R": new Set([4])
-		        }
-		    },
-		    "inputs": [
-		        {
-		            "word": "SANES",
-		            "value": "00010"
-		        },
-		        {
-		            "word": "KEEVE",
-		            "value": "02100"
-		        },
-		        {
-		            "word": "MERLE",
-		            "value": "02101"
-		        },
-		        {
-		            "word": "RETRY",
-		            "value": "12000"
-		        },
-		        {
-		            "word": "DECOR",
-		            "value": "22002"
-		        }
-		    ],
-		    "potentialLetters": "_ABCDEFGHIJKLMNOPQRSTUVWXYZ"
-	}
-	console.log(getPossibleWords(d))
-	console.log(getProbableWords(d))
-
 	return {
-		identifyProbableWordPowers: getProbableWords
+		identifyProbableWordPowers: getProbableWords,
+		setWords
 	}
 })();
 
@@ -395,7 +373,6 @@ logicExecutor.main()
 $(constants.domIds.input.exec).click(function() {
 	logicExecutor.addInput(htmlExecutor.fetchInput());
 	htmlExecutor.setHistory(logicExecutor.model.inputs);
-	console.log(logicExecutor.model)
 	$(constants.domIds.input.word).val("")
 	$(constants.domIds.input.value).val("")
 });
@@ -414,6 +391,12 @@ $(constants.domIds.actions.probableLetters).click(function() {
 	$(constants.domIds.output.textArea).val(output)
 });
 
+$(constants.domIds.history.reset).click(function() {
+	predictor.setWords(window.words);
+	logicExecutor.main();
+	console.log(logicExecutor.model.inputs)
+	htmlExecutor.setHistory(logicExecutor.model.inputs)
+})
 
 /*
  * Identify Letters : Find which letters are best to gamble with
