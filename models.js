@@ -1,3 +1,5 @@
+// TODO WILL REFACTOR THIS CODE TOMORROW
+
 let constants = (function() {
 	let consts =  {
 		alphabets : '_ABCDEFGHIJKLMNOPQRSTUVWXYZ',
